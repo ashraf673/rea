@@ -1,0 +1,70 @@
+name: Build ChatGPT plugin archive
+
+on:
+  push:
+    branches:
+      - chatgpt-rea-reverse-engineering
+    paths:
+      - '.agents/skills/**'
+      - 'chatgpt/rea-reverse-engineering/**'
+      - '.github/workflows/build-chatgpt-plugin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Assemble plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$PWD"
+          STAGE="$RUNNER_TEMP/rea-reverse-engineering"
+          mkdir -p "$STAGE/skills"
+          cp -R .agents/skills/reverse-engineer-anything "$STAGE/skills/"
+          cp -R .agents/skills/rea-analysis-optimization "$STAGE/skills/"
+          cp -R .agents/skills/rea-changelog-update "$STAGE/skills/"
+          cp -R .agents/skills/rea-ci-tests-audit "$STAGE/skills/"
+          cp -R .agents/skills/rea-tool-design "$STAGE/skills/"
+          mkdir -p "$STAGE/skills/android-native-software-analysis"
+          {
+            printf '%s\n' '---' 'name: android-native-software-analysis' 'description: Android APK, native binary, firmware, and software behavior reverse-engineering workflow.' '---' ''
+            cat chatgpt/rea-reverse-engineering/ANDROID_NATIVE_SOFTWARE_ANALYSIS.md
+          } > "$STAGE/skills/android-native-software-analysis/SKILL.md"
+          cat > "$STAGE/plugin.json" <<'JSON'
+          {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "rea-reverse-engineering",
+            "version": "1.0.0",
+            "description": "Evidence-driven reverse engineering for Android applications, native binaries, firmware, and software, with five original REA workflows and supporting references.",
+            "repository": "https://github.com/ashraf673/rea",
+            "keywords": ["reverse-engineering", "android", "native-binaries", "firmware", "software-analysis"]
+          }
+          JSON
+          cat > "$STAGE/README.md" <<'EOF'
+          # REA Reverse Engineering
+
+          This plugin bundles the five original REA skills unchanged, their reference files, and a dedicated Android/native/software analysis skill.
+
+          Source repository: https://github.com/ashraf673/rea
+
+          Original skill directories are copied from .agents/skills/ without editing their contents. The added Android/native skill is based on chatgpt/rea-reverse-engineering/ANDROID_NATIVE_SOFTWARE_ANALYSIS.md.
+
+          This is a skills-only plugin archive. It does not bundle or claim to host an REA MCP server or local analysis executables. Tools such as JDK/JADX, Apktool, ADB, Ghidra, IDA, Hopper, and other providers must be installed and available separately where required.
+          EOF
+          mkdir -p dist
+          cd "$RUNNER_TEMP"
+          zip -qr "$ROOT/dist/REA-Reverse-Engineering-Plugin.zip" rea-reverse-engineering
+          unzip -l "$ROOT/dist/REA-Reverse-Engineering-Plugin.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: REA-Reverse-Engineering-Plugin
+          path: dist/REA-Reverse-Engineering-Plugin.zip
+          if-no-files-found: error
+          retention-days: 14
